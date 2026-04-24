@@ -10,6 +10,7 @@ import org.springframework.beans.factory.annotation.Value;
 
 import java.util.*;
 
+@Component
 public class OllamaClient {
     private final String model;
     private final RestClient restClient;
