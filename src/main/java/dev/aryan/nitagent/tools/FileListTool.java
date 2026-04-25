@@ -13,8 +13,9 @@ public class FileListTool {
     public String list(String directoryPath) {
         try {
             return Files.walk(Path.of(directoryPath))
-                    .filter(Files::isRegularFile)
-                    .map(Path::toString)
+                    .filter(p -> !p.toString().contains("node_modules"))
+                    .filter(p -> !p.toString().contains(".git"))
+                    .map(p -> p.toString())
                     .collect(Collectors.joining("\n"));
         } catch (IOException e) {return "Error listing files: " + e.getMessage();}
     }

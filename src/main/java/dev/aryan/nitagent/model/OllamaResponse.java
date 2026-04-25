@@ -1,5 +1,5 @@
 package dev.aryan.nitagent.model;
 
-public record OllamaResponse(Message message, String doneReason) {
-    public boolean isToolCall() {return message.toolCalls() != null && !message.toolCalls().isEmpty();}
+public record OllamaResponse(Message message, String done_reason) {
+    public boolean isToolCall() {return message.tool_calls() != null && !message.tool_calls().isEmpty();}
 }

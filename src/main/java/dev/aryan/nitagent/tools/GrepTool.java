@@ -1,27 +1,43 @@
 package dev.aryan.nitagent.tools;
 
-import java.io.*;
-import java.nio.*;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.util.stream.*;
 import org.springframework.stereotype.Component;
+import java.io.*;
+import java.util.List;
 
 @Component
 public class GrepTool {
 
     public String grep(String pattern, String directoryPath) {
         try {
-            return Files.walk(Path.of(directoryPath))
-                    .filter(Files::isRegularFile)
-                    .flatMap(file -> {
-                        try {
-                            return Files.lines(file)
-                                    .filter(line -> line.contains(pattern))
-                                    .map(line -> file + ": " + line);
-                        } catch (IOException e) {return java.util.stream.Stream.empty();}
-                    })
-                    .collect(Collectors.joining("\n"));
-        } catch (IOException e) {return "Error running grep: " + e.getMessage();}
+            boolean isWindows = System.getProperty("os.name").toLowerCase().contains("win");
+
+            ProcessBuilder pb;
+            if (isWindows) {
+                pb = new ProcessBuilder(
+                        "wsl", "grep", "-r", "-E", pattern,
+                        toWslPath(directoryPath)
+                );
+            } else {
+                pb = new ProcessBuilder(
+                        "grep", "-r", "-E", pattern, directoryPath
+                );
+            }
+
+            pb.redirectErrorStream(true);
+            Process process = pb.start();
+            String output = new String(process.getInputStream().readAllBytes());
+            System.err.println("GREP COMMAND: " + pb.command());
+            System.err.println("GREP OUTPUT: [" + output + "]");
+            process.waitFor();
+            return output.isBlank() ? "No matches found." : output;
+        } catch (Exception e) {
+            return "Error running grep: " + e.getMessage();
+        }
+    }
+
+    private String toWslPath(String windowsPath) {
+        return windowsPath
+                .replace("C:\\", "/mnt/c/")
+                .replace("\\", "/");
     }
 }
