@@ -25,7 +25,7 @@ public class ToolExec {
             case "read_file" -> fileReaderTool.read((String) args.get("path"));
             case "git_diff" -> gitDiffTool.diff((String) args.get("repo_path"));
             case "grep" -> grepTool.grep((String) args.get("pattern"), (String) args.get("path"));
-            case "generate_tests" -> testMakerTool.readForTesting((String) args.get("path"));
+            case "generate_tests" -> "Test generation is handled via the /generate-tests endpoint. Click the Generate tests tab to get started.";
             default -> "Unknown tool: " + toolName;
         };
     }

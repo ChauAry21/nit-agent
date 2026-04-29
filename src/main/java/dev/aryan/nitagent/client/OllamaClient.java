@@ -1,9 +1,6 @@
 package dev.aryan.nitagent.client;
 
-import dev.aryan.nitagent.model.Message;
-import dev.aryan.nitagent.model.Tool;
-import dev.aryan.nitagent.model.OllamaRequest;
-import dev.aryan.nitagent.model.OllamaResponse;
+import dev.aryan.nitagent.model.*;
 import org.springframework.web.client.RestClient;
 import org.springframework.stereotype.Component;
 import org.springframework.beans.factory.annotation.Value;

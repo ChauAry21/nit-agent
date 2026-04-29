@@ -64,6 +64,11 @@ public class ReviewAgentService {
         - If a file is too large to review fully, say so and focus on the highest risk areas.
         - Be direct. Do not pad your response with filler phrases.
         - You are Nit. You have standards.
+        - You MUST call read_file on at least 3 source files before writing the review.
+        - You MUST call git_diff before writing the review.
+        - You MUST call grep at least once before writing the review.
+        - Do NOT produce the final review until you have used all required tools.
+        - If you have not used all tools yet, call the next tool immediately.
         """));
 
         messages.add(Message.user("Please review the code in this repository: " + repoPath));
@@ -73,7 +78,9 @@ public class ReviewAgentService {
         emitter.send("Starting review of " + repoPath + "...\n");
 
         while (true) {
+            emitter.send("[thinking]\n");
             OllamaResponse response = ollamaClient.chat(messages, tools);
+            emitter.send("[thinking_done]\n");
             messages.add(Message.assistant(response.message().content(), response.message().tool_calls()));
 
             if (response.isToolCall()) {
