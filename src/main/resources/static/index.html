@@ -2,9 +2,467 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Title</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Nit</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@300;400;500&family=IBM+Plex+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+    <style>
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+        :root {
+            --bg: #f5f4f0;
+            --surface: #ffffff;
+            --ink: #1a1a18;
+            --ink-mid: #5a5a56;
+            --ink-light: #9a9a94;
+            --rule: #e2e0da;
+            --tool-bg: #eeecea;
+            --success: #2d6a4f;
+            --warn: #b5451b;
+        }
+
+        html, body { height: 100%; background: var(--bg); color: var(--ink); font-family: 'IBM Plex Sans', sans-serif; font-size: 14px; line-height: 1.5; }
+        .layout { display: grid; grid-template-columns: 380px 1fr; height: 100vh; }
+        .left { background: var(--surface); border-right: 1px solid var(--rule); display: flex; flex-direction: column; overflow: hidden; }
+        .left-header { padding: 2rem 2rem 1.5rem; border-bottom: 1px solid var(--rule); }
+        .wordmark { font-family: 'IBM Plex Mono', monospace; font-weight: 500; font-size: 22px; letter-spacing: -0.5px; color: var(--ink); display: flex; align-items: center; gap: 10px; }
+        .wordmark-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--ink); flex-shrink: 0; transition: background 0.3s; }
+        .wordmark-dot.live { background: var(--success); animation: breathe 2s ease-in-out infinite; }
+        @keyframes breathe { 0%, 100% { transform: scale(1); opacity: 1; } 50% { transform: scale(1.5); opacity: 0.5; } }
+        .tagline { margin-top: 0.35rem; font-size: 11px; color: var(--ink-light); font-family: 'IBM Plex Mono', monospace; }
+        .mode-tabs { display: flex; border-bottom: 1px solid var(--rule); }
+        .mode-tab { flex: 1; padding: 0.75rem 1rem; font-family: 'IBM Plex Mono', monospace; font-size: 11px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.08em; color: var(--ink-light); background: none; border: none; border-bottom: 2px solid transparent; cursor: pointer; transition: color 0.15s, border-color 0.15s; margin-bottom: -1px; }
+        .mode-tab.active { color: var(--ink); border-bottom-color: var(--ink); }
+        .mode-tab:hover:not(.active) { color: var(--ink-mid); }
+        .input-section { padding: 1.5rem 2rem; border-bottom: 1px solid var(--rule); }
+        .input-label { font-size: 11px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.1em; color: var(--ink-light); margin-bottom: 0.6rem; }
+        .path-field { width: 100%; font-family: 'IBM Plex Mono', monospace; font-size: 12px; color: var(--ink); background: var(--bg); border: 1px solid var(--rule); border-radius: 4px; padding: 0.65rem 0.75rem; resize: none; outline: none; line-height: 1.6; transition: border-color 0.15s; }
+        .path-field:focus { border-color: var(--ink); }
+        .path-field::placeholder { color: var(--ink-light); }
+        .input-mode-toggle { display: flex; gap: 0.5rem; margin-top: 0.6rem; }
+        .toggle-btn { font-family: 'IBM Plex Mono', monospace; font-size: 10px; padding: 3px 10px; border-radius: 20px; border: 1px solid var(--rule); background: none; color: var(--ink-light); cursor: pointer; transition: all 0.15s; }
+        .toggle-btn.active { background: var(--ink); color: #f5f4f0; border-color: var(--ink); }
+        .run-row { display: flex; align-items: center; justify-content: space-between; margin-top: 0.75rem; }
+        .run-btn { font-family: 'IBM Plex Mono', monospace; font-size: 12px; font-weight: 500; letter-spacing: 0.04em; color: #f5f4f0; background: var(--ink); border: none; border-radius: 3px; padding: 0.5rem 1.1rem; cursor: pointer; transition: opacity 0.15s; }
+        .run-btn:hover { opacity: 0.75; }
+        .run-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+        .run-hint { font-size: 11px; color: var(--ink-light); font-family: 'IBM Plex Mono', monospace; }
+        .activity-section { flex: 1; overflow-y: auto; padding: 1.5rem 2rem; }
+        .activity-section::-webkit-scrollbar { width: 3px; }
+        .activity-section::-webkit-scrollbar-thumb { background: var(--rule); }
+        .section-label { font-size: 11px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.1em; color: var(--ink-light); margin-bottom: 1rem; }
+        .activity-empty { font-size: 12px; color: var(--ink-light); font-family: 'IBM Plex Mono', monospace; }
+        .activity-list { display: flex; flex-direction: column; }
+        .activity-item { display: flex; gap: 0.75rem; padding: 0.55rem 0; border-bottom: 1px solid var(--rule); animation: slide-in 0.15s ease; }
+        @keyframes slide-in { from { opacity: 0; transform: translateX(-5px); } to { opacity: 1; transform: translateX(0); } }
+        .activity-item:last-child { border-bottom: none; }
+        .activity-icon { flex-shrink: 0; width: 16px; height: 16px; margin-top: 2px; }
+        .activity-icon svg { width: 14px; height: 14px; stroke: var(--ink-mid); fill: none; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
+        .activity-body { flex: 1; min-width: 0; }
+        .activity-tool { font-family: 'IBM Plex Mono', monospace; font-size: 11px; font-weight: 500; color: var(--ink); }
+        .activity-args { font-family: 'IBM Plex Mono', monospace; font-size: 10px; color: var(--ink-light); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 1px; }
+
+        .activity-thinking { display: flex; align-items: center; gap: 0.5rem; padding: 0.55rem 0; animation: slide-in 0.15s ease; }
+        .thinking-dots { display: flex; gap: 3px; }
+        .thinking-dots span { width: 4px; height: 4px; border-radius: 50%; background: var(--ink-light); animation: dot-bounce 1.2s ease-in-out infinite; }
+        .thinking-dots span:nth-child(2) { animation-delay: 0.2s; }
+        .thinking-dots span:nth-child(3) { animation-delay: 0.4s; }
+        @keyframes dot-bounce { 0%, 80%, 100% { transform: scale(0.6); opacity: 0.4; } 40% { transform: scale(1); opacity: 1; } }
+        .thinking-label { font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: var(--ink-light); }
+
+        .right { display: flex; flex-direction: column; overflow: hidden; }
+        .right-header { height: 52px; border-bottom: 1px solid var(--rule); display: flex; align-items: center; padding: 0 2.5rem; gap: 1rem; background: var(--surface); }
+        .right-header-label { font-size: 11px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.1em; color: var(--ink-light); }
+        .status-pill { font-family: 'IBM Plex Mono', monospace; font-size: 10px; padding: 2px 8px; border-radius: 20px; background: var(--tool-bg); color: var(--ink-mid); border: 1px solid var(--rule); transition: all 0.2s; }
+        .status-pill.running { background: #fff8e6; color: #92600a; border-color: #f0d080; }
+        .status-pill.done { background: #eaf4ee; color: var(--success); border-color: #a8d8b8; }
+        .status-pill.error { background: #fdf0eb; color: var(--warn); border-color: #f0b8a0; }
+        .review-pane { flex: 1; overflow-y: auto; padding: 3rem 2.5rem; }
+        .review-pane::-webkit-scrollbar { width: 4px; }
+        .review-pane::-webkit-scrollbar-thumb { background: var(--rule); border-radius: 2px; }
+        .empty { display: flex; flex-direction: column; justify-content: center; height: 100%; max-width: 400px; }
+        .empty-headline { font-family: 'IBM Plex Mono', monospace; font-size: 26px; font-weight: 300; color: var(--ink); line-height: 1.35; letter-spacing: -0.5px; }
+        .empty-headline em { font-style: normal; color: var(--ink-light); }
+        .empty-steps { margin-top: 2rem; display: flex; flex-direction: column; gap: 0.6rem; }
+        .empty-step { display: flex; gap: 1rem; font-size: 12px; color: var(--ink-mid); }
+        .step-num { font-family: 'IBM Plex Mono', monospace; font-size: 10px; color: var(--ink-light); min-width: 16px; margin-top: 2px; }
+        .review-body { max-width: 680px; animation: fade-up 0.3s ease; }
+        @keyframes fade-up { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+        .review-body h3 { font-family: 'IBM Plex Mono', monospace; font-size: 10px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.14em; color: var(--ink-light); margin: 2.5rem 0 1rem; padding-bottom: 0.5rem; border-bottom: 1px solid var(--rule); }
+        .review-body h3:first-child { margin-top: 0; }
+        .review-body p { font-size: 14px; color: var(--ink); line-height: 1.75; margin-bottom: 0.75rem; }
+        .review-body ul, .review-body ol { padding-left: 0; margin-bottom: 1rem; list-style: none; }
+        .review-body li { font-size: 14px; color: var(--ink); line-height: 1.75; margin-bottom: 0.35rem; padding-left: 1.5rem; position: relative; }
+        .review-body li::before { content: '—'; position: absolute; left: 0; color: var(--ink-light); font-family: 'IBM Plex Mono', monospace; }
+        .review-body strong { font-weight: 500; }
+        .review-body code { font-family: 'IBM Plex Mono', monospace; font-size: 12px; background: var(--tool-bg); padding: 1px 5px; border-radius: 3px; border: 1px solid var(--rule); }
+        .rating-block { display: inline-flex; align-items: baseline; gap: 0.3rem; margin: 0.25rem 0 1.5rem; }
+        .rating-num { font-family: 'IBM Plex Mono', monospace; font-size: 52px; font-weight: 300; line-height: 1; color: var(--ink); letter-spacing: -3px; }
+        .rating-denom { font-family: 'IBM Plex Mono', monospace; font-size: 20px; color: var(--ink-light); font-weight: 300; }
+        .test-output { font-family: 'IBM Plex Mono', monospace; font-size: 12px; line-height: 1.8; animation: fade-up 0.3s ease; }
+        .test-line { padding: 0.2rem 0; border-bottom: 1px solid var(--rule); color: var(--ink-mid); }
+        .test-line.done { color: var(--success); }
+        .test-line.generating { color: var(--ink); }
+        .test-line.error { color: var(--warn); }
+
+        .test-thinking { display: flex; align-items: center; gap: 0.5rem; padding: 0.4rem 0; font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: var(--ink-light); }
+
+        .test-summary { margin-top: 2.5rem; padding: 1.5rem; background: var(--surface); border: 1px solid var(--rule); border-radius: 6px; animation: fade-up 0.4s ease; }
+        .test-summary-title { font-family: 'IBM Plex Mono', monospace; font-size: 10px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.14em; color: var(--ink-light); margin-bottom: 1.25rem; padding-bottom: 0.5rem; border-bottom: 1px solid var(--rule); }
+        .test-summary-stats { display: grid; grid-template-columns: repeat(5, 1fr); gap: 1rem; }
+        .stat { display: flex; flex-direction: column; gap: 0.2rem; }
+        .stat-value { font-family: 'IBM Plex Mono', monospace; font-size: 28px; font-weight: 300; color: var(--ink); letter-spacing: -1px; line-height: 1; }
+        .stat-value.good { color: var(--success); }
+        .stat-value.warn { color: var(--warn); }
+        .stat-label { font-family: 'IBM Plex Mono', monospace; font-size: 10px; color: var(--ink-light); text-transform: uppercase; letter-spacing: 0.08em; }
+    </style>
 </head>
 <body>
+<div class="layout">
+    <div class="left">
+        <div class="left-header">
+            <div class="wordmark">
+                <div class="wordmark-dot" id="statusDot"></div>
+                Nit
+            </div>
+            <div class="tagline">// automated code review agent</div>
+        </div>
 
+        <div class="mode-tabs">
+            <button class="mode-tab active" id="tabReview" onclick="switchMode('review')">Review</button>
+            <button class="mode-tab" id="tabTests" onclick="switchMode('tests')">Generate Tests</button>
+        </div>
+
+        <div class="input-section">
+            <div class="input-label" id="inputLabel">Repository path</div>
+            <textarea class="path-field" id="pathInput" rows="3" placeholder="C:\Users\you\Projects\my-repo"></textarea>
+            <div class="input-mode-toggle" id="inputModeToggle" style="display:none">
+                <button class="toggle-btn active" id="toggleRepo" onclick="setInputMode('repo')">Repo</button>
+                <button class="toggle-btn" id="toggleFile" onclick="setInputMode('file')">Single file</button>
+            </div>
+            <div class="run-row">
+                <button class="run-btn" id="runBtn" onclick="run()">Run review</button>
+                <span class="run-hint" id="runHint">↵ to run</span>
+            </div>
+        </div>
+
+        <div class="activity-section">
+            <div class="section-label">Activity</div>
+            <div class="activity-empty" id="activityEmpty">Waiting...</div>
+            <div class="activity-list" id="activityList"></div>
+        </div>
+    </div>
+
+    <div class="right">
+        <div class="right-header">
+            <span class="right-header-label" id="outputLabel">Output</span>
+            <span class="status-pill" id="statusPill">Idle</span>
+        </div>
+        <div class="review-pane" id="reviewPane">
+            <div class="empty" id="emptyState">
+                <div class="empty-headline" id="emptyHeadline">Code review,<br><em>without the noise.</em></div>
+                <div class="empty-steps" id="emptySteps">
+                    <div class="empty-step"><span class="step-num">01</span><span>Paste a local repository path on the left</span></div>
+                    <div class="empty-step"><span class="step-num">02</span><span>Nit reads your files, runs git diff, and scans for issues</span></div>
+                    <div class="empty-step"><span class="step-num">03</span><span>A structured review appears here in real time</span></div>
+                </div>
+            </div>
+            <div class="review-body" id="reviewBody" style="display:none"></div>
+            <div class="test-output" id="testOutput" style="display:none"></div>
+        </div>
+    </div>
+</div>
+
+<script>
+    const ICONS = {
+        list_files: '<polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>',
+        read_file: '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>',
+        git_diff: '<circle cx="18" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><path d="M13 6h3a2 2 0 0 1 2 2v7"/><line x1="6" y1="9" x2="6" y2="21"/>',
+        grep: '<circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>',
+        generate_tests: '<polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/>',
+    };
+
+    let mode = 'review';
+    let inputMode = 'repo';
+    let reviewBuffer = '';
+    let activityThinkingEl = null;
+    let outputThinkingEl = null;
+
+    function switchMode(m) {
+        mode = m;
+        document.getElementById('tabReview').className = 'mode-tab' + (m === 'review' ? ' active' : '');
+        document.getElementById('tabTests').className = 'mode-tab' + (m === 'tests' ? ' active' : '');
+        document.getElementById('inputModeToggle').style.display = m === 'tests' ? 'flex' : 'none';
+        document.getElementById('inputLabel').textContent = m === 'review' ? 'Repository path' : (inputMode === 'repo' ? 'Repository path' : 'File path');
+        document.getElementById('pathInput').placeholder = m === 'review' ? 'C:\\Users\\you\\Projects\\my-repo' : (inputMode === 'repo' ? 'C:\\Users\\you\\Projects\\my-repo' : 'C:\\Users\\you\\Projects\\my-repo\\src\\App.js');
+        document.getElementById('runBtn').textContent = m === 'review' ? 'Run review' : 'Generate tests';
+        document.getElementById('emptyHeadline').innerHTML = m === 'review' ? 'Code review,<br><em>without the noise.</em>' : 'Test generation,<br><em>for any language.</em>';
+        document.getElementById('emptySteps').innerHTML = m === 'review'
+            ? `<div class="empty-step"><span class="step-num">01</span><span>Paste a local repository path</span></div>
+               <div class="empty-step"><span class="step-num">02</span><span>Nit reads your files, runs git diff, and scans for issues</span></div>
+               <div class="empty-step"><span class="step-num">03</span><span>A structured review appears here in real time</span></div>`
+            : `<div class="empty-step"><span class="step-num">01</span><span>Paste a repo path or a single file path</span></div>
+               <div class="empty-step"><span class="step-num">02</span><span>Nit detects the language and picks the right framework</span></div>
+               <div class="empty-step"><span class="step-num">03</span><span>Tests are written to disk with a quality summary</span></div>`;
+        reset();
+    }
+
+    function setInputMode(m) {
+        inputMode = m;
+        document.getElementById('toggleRepo').className = 'toggle-btn' + (m === 'repo' ? ' active' : '');
+        document.getElementById('toggleFile').className = 'toggle-btn' + (m === 'file' ? ' active' : '');
+        document.getElementById('inputLabel').textContent = m === 'repo' ? 'Repository path' : 'File path';
+        document.getElementById('pathInput').placeholder = m === 'repo' ? 'C:\\Users\\you\\Projects\\my-repo' : 'C:\\Users\\you\\Projects\\my-repo\\src\\App.js';
+    }
+
+    function reset() {
+        hideThinking();
+        document.getElementById('emptyState').style.display = 'flex';
+        document.getElementById('reviewBody').style.display = 'none';
+        document.getElementById('testOutput').style.display = 'none';
+        document.getElementById('activityList').innerHTML = '';
+        document.getElementById('activityEmpty').style.display = 'block';
+        document.getElementById('activityEmpty').textContent = 'Waiting...';
+        reviewBuffer = '';
+    }
+
+    function setStatus(state) {
+        const dot = document.getElementById('statusDot');
+        const pill = document.getElementById('statusPill');
+        dot.className = 'wordmark-dot' + (state === 'running' ? ' live' : '');
+        pill.className = 'status-pill' + (state !== 'idle' ? ' ' + state : '');
+        pill.textContent = { idle: 'Idle', running: 'Running', done: 'Done', error: 'Error' }[state] || state;
+    }
+
+    function showThinking() {
+        if (!activityThinkingEl) {
+            const list = document.getElementById('activityList');
+            document.getElementById('activityEmpty').style.display = 'none';
+            activityThinkingEl = document.createElement('div');
+            activityThinkingEl.className = 'activity-thinking';
+            activityThinkingEl.innerHTML = `<div class="thinking-dots"><span></span><span></span><span></span></div><span class="thinking-label">Nit is thinking...</span>`;
+            list.appendChild(activityThinkingEl);
+            list.scrollTop = list.scrollHeight;
+        }
+
+        if (!outputThinkingEl) {
+            const reviewBody = document.getElementById('reviewBody');
+            const testOutput = document.getElementById('testOutput');
+            const container = reviewBody.style.display !== 'none' ? reviewBody : testOutput;
+            if (container.style.display === 'none') return;
+            outputThinkingEl = document.createElement('div');
+            outputThinkingEl.className = 'test-thinking';
+            outputThinkingEl.innerHTML = `<div class="thinking-dots"><span></span><span></span><span></span></div><span>thinking...</span>`;
+            container.appendChild(outputThinkingEl);
+            container.scrollTop = container.scrollHeight;
+        }
+    }
+
+    function hideThinking() {
+        if (activityThinkingEl) { activityThinkingEl.remove(); activityThinkingEl = null; }
+        if (outputThinkingEl) { outputThinkingEl.remove(); outputThinkingEl = null; }
+    }
+
+    function addActivity(name, args) {
+        hideThinking();
+        document.getElementById('activityEmpty').style.display = 'none';
+        const icon = ICONS[name] || '<circle cx="12" cy="12" r="3"/>';
+        const item = document.createElement('div');
+        item.className = 'activity-item';
+        item.innerHTML = `<div class="activity-icon"><svg viewBox="0 0 24 24">${icon}</svg></div><div class="activity-body"><div class="activity-tool">${name}</div><div class="activity-args">${esc(args)}</div></div>`;
+        const list = document.getElementById('activityList');
+        list.appendChild(item);
+        list.scrollTop = list.scrollHeight;
+    }
+
+    function addTestLine(text, cls) {
+        hideThinking();
+        const out = document.getElementById('testOutput');
+        const line = document.createElement('div');
+        line.className = 'test-line ' + (cls || '');
+        line.textContent = text;
+        out.appendChild(line);
+        out.scrollTop = out.scrollHeight;
+    }
+
+    function renderSummary(raw) {
+        hideThinking();
+        const parts = {};
+        raw.replace('[summary]', '').trim().split('|').forEach(p => {
+            const kv = p.trim().split(':');
+            if (kv.length >= 2) parts[kv[0].trim()] = kv.slice(1).join(':').trim();
+        });
+
+        const files = parts['files'] || '0';
+        const success = parts['success'] || '0';
+        const errors = parts['errors'] || '0';
+        const clean = parts['clean'] || '0/0';
+        const avgIter = parts['avg_iterations'] || '1.0';
+
+        const out = document.getElementById('testOutput');
+        const summary = document.createElement('div');
+        summary.className = 'test-summary';
+        summary.innerHTML = `
+            <div class="test-summary-title">Generation Summary</div>
+            <div class="test-summary-stats">
+                <div class="stat"><span class="stat-value">${files}</span><span class="stat-label">Files found</span></div>
+                <div class="stat"><span class="stat-value good">${success}</span><span class="stat-label">Tests written</span></div>
+                <div class="stat"><span class="stat-value ${parseInt(errors) > 0 ? 'warn' : ''}">${errors}</span><span class="stat-label">Errors</span></div>
+                <div class="stat"><span class="stat-value">${clean}</span><span class="stat-label">Clean on critique</span></div>
+                <div class="stat"><span class="stat-value">${avgIter}</span><span class="stat-label">Avg iterations</span></div>
+            </div>`;
+        out.appendChild(summary);
+        out.scrollTop = out.scrollHeight;
+    }
+
+    function esc(s) { return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+    function renderMarkdown(text) {
+        let html = text
+            .replace(/^#{1,3}\s+(.+)$/gm, '<h3>$1</h3>')
+            .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+            .replace(/`([^`\n]+)`/g, '<code>$1</code>')
+            .replace(/^[-*]\s+(.+)$/gm, '<li>$1</li>')
+            .replace(/^\d+\.\s+(.+)$/gm, '<li>$1</li>')
+            .replace(/(<li>[\s\S]*?<\/li>\n?)+/g, m => `<ul>${m}</ul>`)
+            .split('\n').map(l => {
+                if (/^<(h3|ul|li)/.test(l)) return l;
+                if (!l.trim()) return '';
+                return `<p>${l}</p>`;
+            }).join('');
+        const m = html.match(/(\d+)\/10/);
+        if (m) html = html.replace(/(\d+)\/10/, `<div class="rating-block"><span class="rating-num">${m[1]}</span><span class="rating-denom">/10</span></div>`);
+        return html;
+    }
+
+    function run() {
+        const path = document.getElementById('pathInput').value.trim();
+        if (!path) return;
+
+        hideThinking();
+        reviewBuffer = '';
+        document.getElementById('emptyState').style.display = 'none';
+        document.getElementById('activityList').innerHTML = '';
+        document.getElementById('activityEmpty').style.display = 'block';
+        document.getElementById('activityEmpty').textContent = 'Starting...';
+        document.getElementById('runBtn').disabled = true;
+        document.getElementById('runHint').textContent = 'running...';
+        setStatus('running');
+
+        if (mode === 'review') {
+            document.getElementById('reviewBody').style.display = 'block';
+            document.getElementById('reviewBody').innerHTML = '';
+            document.getElementById('testOutput').style.display = 'none';
+            streamReview(path);
+        } else {
+            document.getElementById('testOutput').style.display = 'block';
+            document.getElementById('testOutput').innerHTML = '';
+            document.getElementById('reviewBody').style.display = 'none';
+            streamTests(path);
+        }
+    }
+
+    function streamReview(path) {
+        fetch('/review', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(path)
+        }).then(res => {
+            const reader = res.body.getReader();
+            const dec = new TextDecoder();
+            function read() {
+                reader.read().then(({ done, value }) => {
+                    if (done) {
+                        hideThinking();
+                        document.getElementById('reviewBody').innerHTML = renderMarkdown(reviewBuffer);
+                        document.getElementById('runBtn').disabled = false;
+                        document.getElementById('runHint').textContent = '↵ to run';
+                        setStatus('done');
+                        return;
+                    }
+                    for (const line of dec.decode(value, { stream: true }).split('\n')) {
+                        if (!line.startsWith('data:')) continue;
+                        const data = line.slice(5).trim();
+                        if (!data) continue;
+                        if (data === '[thinking]') {
+                            showThinking();
+                        } else if (data === '[thinking_done]') {
+                            hideThinking();
+                        } else if (data.startsWith('[tool]')) {
+                            hideThinking();
+                            const m = data.match(/\[tool\]\s+(\S+)\s*(.*)/s);
+                            if (m) addActivity(m[1], m[2].trim());
+                        } else if (!data.startsWith('Starting review')) {
+                            reviewBuffer += data + '\n';
+                        }
+                    }
+                    read();
+                });
+            }
+            read();
+        }).catch(() => {
+            hideThinking();
+            setStatus('error');
+            document.getElementById('runBtn').disabled = false;
+            document.getElementById('runHint').textContent = '↵ to run';
+        });
+    }
+
+    function streamTests(path) {
+        const isRepo = inputMode === 'repo';
+        fetch(`/generate-tests?isRepo=${isRepo}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(path)
+        }).then(res => {
+            const reader = res.body.getReader();
+            const dec = new TextDecoder();
+            function read() {
+                reader.read().then(({ done, value }) => {
+                    if (done) {
+                        hideThinking();
+                        document.getElementById('runBtn').disabled = false;
+                        document.getElementById('runHint').textContent = '↵ to run';
+                        setStatus('done');
+                        return;
+                    }
+                    for (const line of dec.decode(value, { stream: true }).split('\n')) {
+                        if (!line.startsWith('data:')) continue;
+                        const data = line.slice(5).trim();
+                        if (!data) continue;
+                        console.log('SSE data:', JSON.stringify(data));
+                        if (data === '[thinking]') {
+                            showThinking();
+                        } else if (data === '[thinking_done]') {
+                            hideThinking();
+                        } else if (data.startsWith('[summary]')) {
+                            renderSummary(data);
+                        } else if (data.startsWith('[generating]')) {
+                            addActivity('generate_tests', data.replace('[generating]', '').trim());
+                            addTestLine(data, 'generating');
+                        } else if (data.startsWith('[done]')) {
+                            addTestLine(data, 'done');
+                        } else if (data.startsWith('Error') || data.startsWith('Failed')) {
+                            addTestLine(data, 'error');
+                        } else {
+                            addTestLine(data);
+                        }
+                    }
+                    read();
+                });
+            }
+            read();
+        }).catch(() => {
+            hideThinking();
+            setStatus('error');
+            document.getElementById('runBtn').disabled = false;
+            document.getElementById('runHint').textContent = '↵ to run';
+        });
+    }
+
+    document.getElementById('pathInput').addEventListener('keydown', e => {
+        if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); run(); }
+    });
+</script>
 </body>
 </html>

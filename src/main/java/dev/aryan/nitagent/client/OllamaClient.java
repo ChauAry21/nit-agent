@@ -13,16 +13,24 @@ import java.util.*;
 @Component
 public class OllamaClient {
     private final String model;
+    private final String fastModel;
     private final RestClient restClient;
 
-    public OllamaClient(RestClient.Builder builder, @Value("${ollama.base-url}") String baseUrl, @Value("${ollama.model}") String model) {
+    public OllamaClient(RestClient.Builder builder,
+                        @Value("${ollama.base-url}") String baseUrl,
+                        @Value("${ollama.model}") String model,
+                        @Value("${ollama.fast-model}") String fastModel) {
         this.model = model;
+        this.fastModel = fastModel;
         this.restClient = builder.baseUrl(baseUrl).build();
     }
 
     public OllamaResponse chat(List<Message> messages, List<Tool> tools) {
-        OllamaRequest request = new OllamaRequest(model, messages, tools, false);
+        return chat(messages, tools, false);
+    }
 
+    public OllamaResponse chat(List<Message> messages, List<Tool> tools, boolean fast) {
+        OllamaRequest request = new OllamaRequest(fast ? fastModel : model, messages, tools, false);
         return restClient.post()
                 .uri("/api/chat")
                 .body(request)
