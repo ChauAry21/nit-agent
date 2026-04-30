@@ -68,10 +68,28 @@ public class ReviewAgentService {
         - You MUST call git_diff before writing the review.
         - You MUST call grep at least once before writing the review.
         - Do NOT produce the final review until you have used all required tools.
-        - If you have not used all tools yet, call the next tool immediately.
+        - If you have not used all tools yet, call the next tool immediately. Do not explain what you are about to do, just call the tool.
+        - Never write a review based only on the file list. You must read the actual source files first.
+        - Do NOT write or suggest code in your review. Describe issues and recommendations in plain English only.
+        - Do NOT include code blocks, code snippets, or revised versions of any files.
+        
+        Your review MUST use exactly these section headers, in this order, with no substitutions:
+        
+        SECURITY & EDGE CASES
+        CODE QUALITY & READABILITY
+        PERFORMANCE
+        TEST COVERAGE
+        SUMMARY
+        
+        The SUMMARY section MUST contain:
+        - A rating in the format "X/10" followed by one sentence justification.
+        - A numbered list of the top 3 things to fix immediately.
+        - One sentence of genuine encouragement.
+        
+        Do not rename, reorder, skip, or add sections. Do not use "Final Thoughts", "Conclusion", or any other header.
         """));
 
-        messages.add(Message.user("Please review the code in this repository: " + repoPath));
+        messages.add(Message.user("Review the code in this repository: " + repoPath + ". Follow your review process exactly. Do not respond conversationally. Call your tools in order and produce the structured review."));
 
         List<Tool> tools = buildTools();
 
@@ -101,6 +119,20 @@ public class ReviewAgentService {
                 String result = handleJsonToolCall(cleaned, emitter);
                 messages.add(Message.tool(result));
             } else {
+                if (!response.message().content().contains("SECURITY & EDGE CASES")) {
+                    messages.add(Message.user("""
+                    Your response did not follow the required format. You MUST now produce the structured review using exactly these headers in order:
+                    
+                    SECURITY & EDGE CASES
+                    CODE QUALITY & READABILITY
+                    PERFORMANCE
+                    TEST COVERAGE
+                    SUMMARY (include X/10 rating, top 3 fixes, one encouragement)
+                    
+                    Do not write code. Do not respond conversationally. Write the review now.
+                    """));
+                    continue;
+                }
                 String content = response.message().content();
                 System.err.println("FINAL CONTENT: [" + content + "]");
                 if (content == null || content.isBlank()) {
@@ -116,8 +148,8 @@ public class ReviewAgentService {
 
     private boolean isJsonToolCall(String content) {
         if (content == null) return false;
-        String trimmed = content.replaceAll("(?s)```json\\s*", "").replaceAll("(?s)```\\s*", "").trim();
-        return trimmed.contains("\"name\"") && trimmed.contains("\"arguments\"");
+        String trimmed = content.replaceAll("(?s)```\\w*\\s*", "").replaceAll("(?s)```\\s*", "").trim();
+        return trimmed.startsWith("{") && trimmed.contains("\"name\"") && trimmed.contains("\"arguments\"");
     }
 
     private String handleJsonToolCall(String content, SseEmitter emitter) {

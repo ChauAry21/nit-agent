@@ -15,6 +15,7 @@ public class FileListTool {
             return Files.walk(Path.of(directoryPath))
                     .filter(p -> !p.toString().contains("node_modules"))
                     .filter(p -> !p.toString().contains(".git"))
+                    .filter(p -> !p.toString().contains(".venv"))
                     .map(p -> p.toString())
                     .collect(Collectors.joining("\n"));
         } catch (IOException e) {return "Error listing files: " + e.getMessage();}

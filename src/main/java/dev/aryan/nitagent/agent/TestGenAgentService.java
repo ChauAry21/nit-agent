@@ -27,7 +27,13 @@ public class TestGenAgentService {
             String result = testMakerTool.generateTests(input);
             emitter.send("[thinking_done]\n");
             emitter.send("[done] " + result + "\n");
-            emitter.send("[summary] files:1 | " + parseSummaryFromResult(result));
+            boolean clean = parseClean(result);
+            boolean error = result.startsWith("Error") || result.startsWith("Generated tests but failed");
+            int iters = parseIterations(result);
+            emitter.send("[summary] files:1 | success:" + (error ? 0 : 1)
+                    + " | errors:" + (error ? 1 : 0)
+                    + " | clean:" + (clean ? "1/1" : "0/1")
+                    + " | avg_iterations:" + iters + ".0\n");
             return;
         }
 
