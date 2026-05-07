@@ -1,13 +1,22 @@
 package dev.aryan.nitagent.tools;
 
-import java.util.*;
-import java.io.*;
-import java.nio.file.*;
-import org.springframework.stereotype.Component;
-import org.slf4j.*;
-import dev.aryan.nitagent.agent.test.*;
+import dev.aryan.nitagent.agent.test.CritiqueResult;
+import dev.aryan.nitagent.agent.test.LanguageDetector;
+import dev.aryan.nitagent.agent.test.SupportedLanguage;
+import dev.aryan.nitagent.agent.test.TestPrompt;
 import dev.aryan.nitagent.client.OllamaClient;
-import dev.aryan.nitagent.model.*;
+import dev.aryan.nitagent.model.Message;
+import dev.aryan.nitagent.model.OllamaResponse;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.stereotype.Component;
+
+import java.io.File;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.List;
 
 @Component
 public class TestMakerTool {
@@ -15,6 +24,10 @@ public class TestMakerTool {
     private static final Logger log = LoggerFactory.getLogger(TestMakerTool.class);
     private static final int MAX_ITERATIONS = 3;
     private static final int MAX_PROJECT_ROOT_DEPTH = 8;
+    private static final int MAX_IMPORTED_LINES = 200;
+    private static final int MAX_IMPORTED_CHARS = 40_000;
+    private static final long MAX_FILE_SIZE_BYTES = 1024 * 1024;
+    private static final int MAX_PATH_LENGTH = 1024;
 
     private final OllamaClient ollamaClient;
 
@@ -23,16 +36,25 @@ public class TestMakerTool {
     }
 
     public String generateTests(String filePath, boolean fast) {
+        if (filePath == null || filePath.isBlank()) return "Error reading file: path is empty.";
+        if (filePath.length() > MAX_PATH_LENGTH) return "Error reading file: path exceeds maximum length.";
+
         String sourceCode;
         try {
-            sourceCode = Files.readString(Path.of(filePath));
+            Path sourcePath = Path.of(filePath).normalize();
+
+            if (!Files.exists(sourcePath)) return "Skipped unreadable file: file does not exist.";
+            if (!Files.isRegularFile(sourcePath)) return "Skipped unreadable file: path is not a file.";
+            if (Files.size(sourcePath) > MAX_FILE_SIZE_BYTES) return "Skipped unreadable file: file exceeds 1MB limit.";
+
+            sourceCode = Files.readString(sourcePath);
         } catch (IOException e) {
             log.error("Error reading file {}: {}", filePath, e.getMessage());
-            return "Error reading file: " + e.getMessage();
+            return "Skipped unreadable file: " + e.getMessage();
         }
 
         String fileName = Path.of(filePath).getFileName().toString();
-        SupportedLanguage language = detectLanguage(fileName, sourceCode);
+        SupportedLanguage language = LanguageDetector.detect(fileName, sourceCode);
         String dependencies = readDependencyFile(filePath, language);
         String importedSources = readImportedSources(filePath, sourceCode, language);
         String context = buildContext(fileName, language.name, sourceCode, dependencies, importedSources);
@@ -51,13 +73,14 @@ public class TestMakerTool {
 
             testCode = response.message().content();
             if (testCode == null || testCode.isBlank()) return "Model returned empty test output.";
-            testCode = testCode.replaceAll("(?s)```[a-z]*\\s*", "").replaceAll("```", "").trim();
+            testCode = stripCodeFence(testCode);
             messages.add(Message.assistant(testCode, null));
 
             messages.add(Message.user(TestPrompt.buildCritique(testCode, sourceCode, importedSources)));
 
             OllamaResponse critiqueResponse = ollamaClient.chat(messages, List.of(), true);
             String critique = critiqueResponse.message().content();
+            if (critique == null) critique = "";
 
             clean = CritiqueResult.isClean(critique);
             if (clean) break;
@@ -67,6 +90,7 @@ public class TestMakerTool {
         }
 
         String testFilePath = resolveTestFilePath(filePath, fileName, language);
+
         try {
             Path testPath = Path.of(testFilePath);
             Files.createDirectories(testPath.getParent());
@@ -78,9 +102,14 @@ public class TestMakerTool {
         }
     }
 
+    private String stripCodeFence(String text) {
+        return text.replaceAll("(?s)```[a-zA-Z0-9]*\\s*", "").replaceAll("```", "").trim();
+    }
+
     private String buildContext(String fileName, String language, String sourceCode, String dependencies, String importedSources) {
         StringBuilder sb = new StringBuilder();
         sb.append("FILE: ").append(fileName).append("\n\n");
+        sb.append("LANGUAGE: ").append(language).append("\n\n");
         sb.append("SOURCE CODE:\n").append(sourceCode).append("\n\n");
         if (!dependencies.isBlank()) sb.append("DEPENDENCY FILE:\n").append(dependencies).append("\n\n");
         if (!importedSources.isBlank()) sb.append("IMPORTED SOURCE FILES:\n").append(importedSources).append("\n\n");
@@ -89,130 +118,148 @@ public class TestMakerTool {
 
     private String readDependencyFile(String filePath, SupportedLanguage language) {
         if (language.depFile == null) return "";
-        Path dir = Path.of(filePath).getParent();
+
+        Path dir = Path.of(filePath).normalize().getParent();
+
         try {
             Path root = findProjectRoot(dir, language);
             if (root == null) return "";
+
             Path depPath = root.resolve(language.depFile);
-            return Files.exists(depPath) ? Files.readString(depPath) : "";
+            if (!Files.exists(depPath) || !Files.isRegularFile(depPath)) return "";
+            if (Files.size(depPath) > MAX_FILE_SIZE_BYTES) return "[DEPENDENCY FILE SKIPPED: exceeds 1MB]";
+
+            return Files.readString(depPath);
         } catch (IOException e) {
-            log.error("Error reading dependency file: {}", e.getMessage());
+            log.warn("Error reading dependency file for {}: {}", filePath, e.getMessage());
             return "";
         }
     }
 
     private Path findProjectRoot(Path dir, SupportedLanguage language) {
-        if (language.depFile == null) return null;
+        if (dir == null || language.depFile == null) return null;
+
         Path current = dir;
+
         for (int i = 0; i < MAX_PROJECT_ROOT_DEPTH; i++) {
             if (Files.exists(current.resolve(language.depFile))) return current;
+
             Path parent = current.getParent();
             if (parent == null) break;
             current = parent;
         }
+
         return null;
     }
 
     private String readImportedSources(String filePath, String sourceCode, SupportedLanguage language) {
         StringBuilder sb = new StringBuilder();
-        Path sourceDir = Path.of(filePath).getParent();
+        Path sourceDir = Path.of(filePath).normalize().getParent();
+
+        if (sourceDir == null) return "";
 
         if (language == SupportedLanguage.JAVA) {
+            Path root = findProjectRoot(sourceDir, SupportedLanguage.JAVA);
+            if (root == null) return "";
+
             sourceCode.lines()
-                    .filter(l -> l.startsWith("import " + detectBasePackage(sourceCode)))
-                    .map(l -> l.replace("import ", "").replace(";", "").trim())
-                    .forEach(fqn -> {
-                        String relativePath = fqn.replace(".", File.separator) + ".java";
-                        try {
-                            Path root = findProjectRoot(sourceDir, SupportedLanguage.JAVA);
-                            if (root == null) return;
-                            Path candidate = root.resolve("src/main/java/" + relativePath);
-                            if (Files.exists(candidate)) {
-                                sb.append("// ").append(fqn).append("\n");
-                                sb.append(Files.readString(candidate)).append("\n\n");
-                            }
-                        } catch (IOException ignored) {}
-                    });
+                    .filter(line -> line.startsWith("import " + detectBasePackage(sourceCode)))
+                    .map(line -> line.replace("import ", "").replace(";", "").trim())
+                    .forEach(fqn -> appendJavaImport(sb, root, fqn));
         } else if (language == SupportedLanguage.JAVASCRIPT || language == SupportedLanguage.TYPESCRIPT || language == SupportedLanguage.REACT) {
             sourceCode.lines()
-                    .filter(l -> l.contains("from \"./") || l.contains("from '../") || l.contains("from './"))
-                    .forEach(l -> {
-                        String imp = l.replaceAll(".*from ['\"]([^'\"]+)['\"].*", "$1");
-                        try {
-                            for (String ext : List.of(".js", ".ts", ".jsx", ".tsx")) {
-                                Path candidate = sourceDir.resolve(imp + ext);
-                                if (Files.exists(candidate)) {
-                                    sb.append("// ").append(imp).append("\n");
-                                    sb.append(Files.readString(candidate)).append("\n\n");
-                                    break;
-                                }
-                            }
-                        } catch (IOException ignored) {}
-                    });
+                    .filter(line -> line.contains("from \"./") || line.contains("from '../") || line.contains("from './") || line.contains("from \"../"))
+                    .forEach(line -> appendJsImport(sb, sourceDir, line));
         }
 
-        return sb.toString();
+        String imported = sb.toString();
+
+        if (imported.length() > MAX_IMPORTED_CHARS) {
+            return imported.substring(0, MAX_IMPORTED_CHARS) + "\n[IMPORTED SOURCES TRUNCATED]";
+        }
+
+        return imported;
+    }
+
+    private void appendJavaImport(StringBuilder sb, Path root, String fqn) {
+        String relativePath = fqn.replace(".", File.separator) + ".java";
+        Path candidate = root.resolve("src/main/java/" + relativePath);
+
+        appendImportedFile(sb, candidate, fqn);
+    }
+
+    private void appendJsImport(StringBuilder sb, Path sourceDir, String line) {
+        String imp = line.replaceAll(".*from ['\"]([^'\"]+)['\"].*", "$1");
+
+        for (String ext : List.of("", ".js", ".ts", ".jsx", ".tsx")) {
+            Path candidate = sourceDir.resolve(imp + ext).normalize();
+
+            if (Files.exists(candidate) && Files.isRegularFile(candidate)) {
+                appendImportedFile(sb, candidate, imp);
+                return;
+            }
+        }
+    }
+
+    private void appendImportedFile(StringBuilder sb, Path candidate, String label) {
+        try {
+            if (!Files.exists(candidate) || !Files.isRegularFile(candidate)) return;
+            if (Files.size(candidate) > MAX_FILE_SIZE_BYTES) {
+                sb.append("// ").append(label).append("\n");
+                sb.append("[IMPORTED FILE SKIPPED: exceeds 1MB]\n\n");
+                return;
+            }
+
+            List<String> lines = Files.readAllLines(candidate);
+            sb.append("// ").append(label).append("\n");
+            lines.stream().limit(MAX_IMPORTED_LINES).forEach(line -> sb.append(line).append("\n"));
+
+            if (lines.size() > MAX_IMPORTED_LINES) {
+                sb.append("[IMPORTED FILE TRUNCATED AT ").append(MAX_IMPORTED_LINES).append(" LINES]\n");
+            }
+
+            sb.append("\n");
+        } catch (IOException e) {
+            log.debug("Skipping imported file {}: {}", candidate, e.getMessage());
+        }
     }
 
     private String detectBasePackage(String sourceCode) {
         return sourceCode.lines()
-                .filter(l -> l.startsWith("package "))
-                .map(l -> {
-                    String[] parts = l.replace("package ", "").replace(";", "").trim().split("\\.");
+                .filter(line -> line.startsWith("package "))
+                .map(line -> {
+                    String[] parts = line.replace("package ", "").replace(";", "").trim().split("\\.");
                     return parts.length >= 2 ? parts[0] + "." + parts[1] : parts[0];
                 })
                 .findFirst()
                 .orElse("dev.aryan");
     }
 
-    private SupportedLanguage detectLanguage(String fileName, String sourceCode) {
-        String firstLine = sourceCode.lines().findFirst().orElse("");
-        if (firstLine.contains("python")) return SupportedLanguage.PYTHON;
-        if (firstLine.contains("node") || firstLine.contains("deno")) return SupportedLanguage.JAVASCRIPT;
-        if (firstLine.contains("ruby")) return SupportedLanguage.RUBY;
-        if (firstLine.contains("bash") || firstLine.contains("sh")) return SupportedLanguage.BASH;
-
-        if (sourceCode.contains("package ") && sourceCode.contains("func ")) return SupportedLanguage.GO;
-        if (sourceCode.contains("fn main()") || sourceCode.contains("pub fn ")) return SupportedLanguage.RUST;
-        if (sourceCode.contains("import java") || (sourceCode.contains("package ") && sourceCode.contains("class "))) return SupportedLanguage.JAVA;
-        if (sourceCode.contains("using System") || sourceCode.contains("namespace ")) return SupportedLanguage.CSHARP;
-        if (sourceCode.contains("#include") && (sourceCode.contains("std::") || sourceCode.contains("cout"))) return SupportedLanguage.CPP;
-        if (sourceCode.contains("import React") || sourceCode.contains("from 'react'") || sourceCode.contains("from \"react\"")) return SupportedLanguage.REACT;
-        if (sourceCode.contains("export default") || sourceCode.contains("export const")) return SupportedLanguage.TYPESCRIPT;
-        if (sourceCode.contains("require(") || sourceCode.contains("module.exports")) return SupportedLanguage.JAVASCRIPT;
-        if (sourceCode.contains("def ") && sourceCode.contains("import ")) return SupportedLanguage.PYTHON;
-
-        if (!fileName.contains(".")) return SupportedLanguage.UNKNOWN;
-        return switch (fileName.substring(fileName.lastIndexOf('.') + 1)) {
-            case "java" -> SupportedLanguage.JAVA;
-            case "js" -> SupportedLanguage.JAVASCRIPT;
-            case "ts" -> SupportedLanguage.TYPESCRIPT;
-            case "jsx", "tsx" -> SupportedLanguage.REACT;
-            case "py" -> SupportedLanguage.PYTHON;
-            case "go" -> SupportedLanguage.GO;
-            case "rs" -> SupportedLanguage.RUST;
-            case "rb" -> SupportedLanguage.RUBY;
-            case "cs" -> SupportedLanguage.CSHARP;
-            case "cpp", "cc", "cxx" -> SupportedLanguage.CPP;
-            case "sh", "bash" -> SupportedLanguage.BASH;
-            case "php" -> SupportedLanguage.PHP;
-            case "swift" -> SupportedLanguage.SWIFT;
-            case "kt" -> SupportedLanguage.KOTLIN;
-            default -> SupportedLanguage.UNKNOWN;
-        };
-    }
-
     private String resolveTestFilePath(String originalPath, String fileName, SupportedLanguage language) {
-        String dir = Path.of(originalPath).getParent().toString();
+        Path original = Path.of(originalPath).normalize();
+        Path dir = original.getParent();
         String baseName = fileName.contains(".") ? fileName.substring(0, fileName.lastIndexOf('.')) : fileName;
         String ext = fileName.contains(".") ? fileName.substring(fileName.lastIndexOf('.')) : "";
 
+        if (dir == null) dir = Path.of(".");
+
         return switch (language) {
-            case JAVA -> dir.replace("main", "test") + "\\" + baseName + "Test.java";
-            case PYTHON -> dir + "\\test_" + baseName + ".py";
-            case GO -> dir + "\\" + baseName + "_test.go";
-            case RUST -> dir + "\\" + baseName + "_test.rs";
-            default -> dir + "\\" + baseName + ".test" + ext;
+            case JAVA -> replaceMainWithTest(dir).resolve(baseName + "Test.java").toString();
+            case PYTHON -> dir.resolve("test_" + baseName + ".py").toString();
+            case GO -> dir.resolve(baseName + "_test.go").toString();
+            case RUST -> dir.resolve(baseName + "_test.rs").toString();
+            default -> dir.resolve(baseName + ".test" + ext).toString();
         };
+    }
+
+    private Path replaceMainWithTest(Path dir) {
+        String path = dir.toString();
+        String replaced = path.replace(File.separator + "main" + File.separator, File.separator + "test" + File.separator);
+
+        if (replaced.equals(path)) {
+            replaced = path.replace("/main/", "/test/").replace("\\main\\", "\\test\\");
+        }
+
+        return Path.of(replaced);
     }
 }
