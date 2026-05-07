@@ -1,7 +1,7 @@
 package dev.aryan.nitagent.controller;
 
-import dev.aryan.nitagent.agent.ReviewAgentService;
-import dev.aryan.nitagent.agent.TestGenAgentService;
+import dev.aryan.nitagent.agent.review.ReviewAgentService;
+import dev.aryan.nitagent.agent.test.TestGenAgentService;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
@@ -17,11 +17,15 @@ public class ReviewController {
     }
 
     @PostMapping("/review")
-    public SseEmitter review(@RequestBody String repoPath) {
+    public SseEmitter review(
+            @RequestBody String repoPath,
+            @RequestParam(defaultValue = "thinking") String modelMode
+    ) {
         SseEmitter emitter = new SseEmitter(0L);
         new Thread(() -> {
             try {
-                reviewAgentService.review(repoPath, emitter);
+                boolean fast = modelMode.equalsIgnoreCase("fast");
+                reviewAgentService.review(repoPath, emitter, fast);
                 emitter.complete();
             } catch (Exception e) {
                 emitter.completeWithError(e);
@@ -31,11 +35,16 @@ public class ReviewController {
     }
 
     @PostMapping("/generate-tests")
-    public SseEmitter generateTests(@RequestBody String path, @RequestParam(defaultValue = "false") boolean isRepo) {
+    public SseEmitter generateTests(
+            @RequestBody String path,
+            @RequestParam(defaultValue = "false") boolean isRepo,
+            @RequestParam(defaultValue = "thinking") String modelMode
+    ) {
         SseEmitter emitter = new SseEmitter(0L);
         new Thread(() -> {
             try {
-                testGenAgentService.generateTests(path, isRepo, emitter);
+                boolean fast = modelMode.equalsIgnoreCase("fast");
+                testGenAgentService.generateTests(path, isRepo, emitter, fast);
                 emitter.complete();
             } catch (Exception e) {
                 emitter.completeWithError(e);
