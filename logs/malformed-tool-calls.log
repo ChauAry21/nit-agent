@@ -1,0 +1,22 @@
+
+--- 2026-05-07T20:32:59.000589200Z ---
+Failed to parse tool call: ServletResponse failed to flushBuffer: java.io.IOException: An established connection was aborted by the software in your host machine
+```json
+{
+  "name": "grep",
+  "arguments": {
+    "path": "src/main/java/dev/aryan/nitagent/",
+    "pattern": "\\b(apiKey|Authorization)\\b"
+  }
+}
+```
+
+--- 2026-05-07T20:46:52.085658500Z ---
+Failed to parse tool call: ServletResponse failed to flushBuffer: java.io.IOException: An established connection was aborted by the software in your host machine
+{
+  "name": "grep",
+  "arguments": {
+    "path": "C:\\Users\\aryan\\OneDrive\\Documents\\VSCodeProjects\\nit-agent",
+    "pattern": "SELECT|INSERT|UPDATE|DELETE"
+  }
+}
